@@ -30,7 +30,7 @@
 
 #include <cutils/log.h>
 
-#define COMPAT_GRALLOC_PERFORM
+//#define COMPAT_GRALLOC_PERFORM
 
 #define ROUND_UP_PAGESIZE(x) ( (((unsigned long)(x)) + PAGE_SIZE-1)  & \
                                (~(PAGE_SIZE-1)) )
