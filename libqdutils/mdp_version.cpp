@@ -167,7 +167,7 @@ void  MDPVersion::updatePanelInfo() {
                           mPanelInfo.mPartialUpdateEnable? "Enabled" :
                           "Disabled");
                 }
-                if(!strncmp(tokens[0], "xstart", strlen("xstart"))) {
+                if(!strncmp(tokens[0], "xalign", strlen("xalign"))) {
                     mPanelInfo.mLeftAlign = atoi(tokens[1]);
                     ALOGI("Left Align: %d", mPanelInfo.mLeftAlign);
                 }
@@ -190,6 +190,10 @@ void  MDPVersion::updatePanelInfo() {
                 if(!strncmp(tokens[0], "min_h", strlen("min_h"))) {
                     mPanelInfo.mMinROIHeight = atoi(tokens[1]);
                     ALOGI("Min ROI Height: %d", mPanelInfo.mMinROIHeight);
+                }
+                if(!strncmp(tokens[0], "roi_merge", strlen("roi_merge"))) {
+                    mPanelInfo.mNeedsROIMerge = atoi(tokens[1]);
+                    ALOGI("Needs ROI Merge: %d", mPanelInfo.mNeedsROIMerge);
                 }
             }
         }

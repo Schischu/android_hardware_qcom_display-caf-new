@@ -33,11 +33,6 @@
 #include "mdp_version.h"
 #include "qdMetaData.h"
 
-#ifdef USES_QSEED_SCALAR
-#include <scale/scale.h>
-using namespace scale;
-#endif
-
 #define PIPE_DEBUG 0
 
 namespace overlay {
@@ -350,26 +345,19 @@ void Overlay::setSource(const utils::PipeArgs args,
     int index = (int)dest;
     validate(index);
 
-    PipeArgs newArgs(args);
-    if(PipeBook::getPipeType(dest) == OV_MDP_PIPE_VG) {
-        setMdpFlags(newArgs.mdpFlags, OV_MDP_PIPE_SHARE);
-    } else {
-        clearMdpFlags(newArgs.mdpFlags, OV_MDP_PIPE_SHARE);
-    }
-
-    if(PipeBook::getPipeType(dest) == OV_MDP_PIPE_DMA) {
-        setMdpFlags(newArgs.mdpFlags, OV_MDP_PIPE_FORCE_DMA);
-    } else {
-        clearMdpFlags(newArgs.mdpFlags, OV_MDP_PIPE_FORCE_DMA);
-    }
-
-    mPipeBook[index].mPipe->setSource(newArgs);
+    setPipeType(dest, PipeBook::getPipeType(dest));
+    mPipeBook[dest].mPipe->setSource(args);
 }
 
 void Overlay::setVisualParams(const MetaData_t& metadata, utils::eDest dest) {
     int index = (int)dest;
     validate(index);
     mPipeBook[index].mPipe->setVisualParams(metadata);
+}
+
+void Overlay::setPipeType(utils::eDest pipeIndex,
+        const utils::eMdpPipeType pType) {
+    mPipeBook[pipeIndex].mPipe->setPipeType(pType);
 }
 
 Overlay* Overlay::getInstance() {
@@ -471,20 +459,31 @@ int Overlay::initOverlay() {
 }
 
 bool Overlay::displayCommit(const int& fd) {
-    utils::Dim roi;
-    return displayCommit(fd, roi);
+    utils::Dim lRoi, rRoi;
+    return displayCommit(fd, lRoi, rRoi);
 }
 
-bool Overlay::displayCommit(const int& fd, const utils::Dim& roi) {
+bool Overlay::displayCommit(const int& fd, const utils::Dim& lRoi,
+        const utils::Dim& rRoi) {
     //Commit
     struct mdp_display_commit info;
     memset(&info, 0, sizeof(struct mdp_display_commit));
     info.flags = MDP_DISPLAY_COMMIT_OVERLAY;
-    info.roi.x = roi.x;
-    info.roi.y = roi.y;
-    info.roi.w = roi.w;
-    info.roi.h = roi.h;
-
+#ifdef DUAL_DSI
+    info.l_roi.x = lRoi.x;
+    info.l_roi.y = lRoi.y;
+    info.l_roi.w = lRoi.w;
+    info.l_roi.h = lRoi.h;
+    info.r_roi.x = rRoi.x;
+    info.r_roi.y = rRoi.y;
+    info.r_roi.w = rRoi.w;
+    info.r_roi.h = rRoi.h;
+#else
+    info.roi.x = lRoi.x;
+    info.roi.y = lRoi.y;
+    info.roi.w = lRoi.w;
+    info.roi.h = lRoi.h;
+#endif
     if(!mdp_wrapper::displayCommit(fd, info)) {
         ALOGE("%s: commit failed", __func__);
         return false;
@@ -545,39 +544,20 @@ bool Overlay::validateAndSet(const int& dpy, const int& fbFd) {
 }
 
 void Overlay::initScalar() {
-#ifdef USES_QSEED_SCALAR
     if(sLibScaleHandle == NULL) {
         sLibScaleHandle = dlopen("libscale.so", RTLD_NOW);
-    }
-
-    if(sLibScaleHandle) {
-        if(sScale == NULL) {
-            Scale* (*getInstance)();
-            *(void **) &getInstance = dlsym(sLibScaleHandle, "getInstance");
-            if(getInstance) {
-                sScale = getInstance();
-            }
+        if(sLibScaleHandle) {
+            *(void **) &sFnProgramScale =
+                    dlsym(sLibScaleHandle, "programScale");
         }
     }
-#endif
 }
 
 void Overlay::destroyScalar() {
-#ifdef USES_QSEED_SCALAR
     if(sLibScaleHandle) {
-        if(sScale) {
-            void (*destroyInstance)(Scale*);
-            *(void **) &destroyInstance = dlsym(sLibScaleHandle,
-                    "destroyInstance");
-            if(destroyInstance) {
-                destroyInstance(sScale);
-                sScale = NULL;
-            }
-        }
         dlclose(sLibScaleHandle);
         sLibScaleHandle = NULL;
     }
-#endif
 }
 
 void Overlay::PipeBook::init() {
@@ -607,6 +587,6 @@ int Overlay::PipeBook::sAllocatedBitmap = 0;
 utils::eMdpPipeType Overlay::PipeBook::pipeTypeLUT[utils::OV_MAX] =
     {utils::OV_MDP_PIPE_ANY};
 void *Overlay::sLibScaleHandle = NULL;
-scale::Scale *Overlay::sScale = NULL;
+int (*Overlay::sFnProgramScale)(struct mdp_overlay_list *) = NULL;
 
 }; // namespace overlay
